@@ -1,0 +1,129 @@
+package templates;
+
+import "pwrbazy/models"
+import "fmt"
+import "time"
+
+
+templ Index() {
+	<html>
+		<head>
+			<style>
+			input {
+				display: box;
+			}
+			</style>
+			<script src="https://unpkg.com/htmx.org@1.9.10"></script>
+		</head>
+		<body>
+			<h1>BANK</h1>
+
+			<form method="POST" action="/login">
+				<input type="text" id="login" name="login" placeholder="Login"/>
+				<input type="password" id="password" name="password"/>
+				<input type="submit" value="Loguj"/>
+			</form>
+		</body>
+	</html>
+}
+
+templ IndexAccount(osobowe models.Osobowe, konto models.Konto) {
+	<html>
+		<head>
+			<script src="https://unpkg.com/htmx.org@1.9.10"></script>
+		</head>
+		<body>
+			<h1>BANK</h1>
+
+			<h1>
+				Cześć {osobowe.Imie} {osobowe.Imie2} {osobowe.Nazwisko}
+			</h1>
+			<div>
+				Stan konta {konto.SrodkiStr()} PLN
+			</div>
+
+			<h2>Katalog lokat banku</h2>
+			<div hx-get="/lokaty" hx-trigger="load">
+				Ładowanie oferty banku
+			</div>
+			<h2>Twoje lokaty!!!</h2>
+			<div hx-get="/moje_lokaty" hx-trigger="load">
+				Ładowanie lokat
+			</div>
+			<h2>Wykonaj przelew!!!</h2>
+			<div hx-get="/przelej_forma" hx-trigger="load">
+				Ładowanie ekranu przelewania
+			</div>
+
+			<h2>Historia przelewów!!!</h2>
+			<div hx-get="/moje_przelewy" hx-trigger="load">
+				Ładowanie ekranu przelewów
+			</div>
+		</body>
+	</html>
+}
+
+templ Lokata(lokata models.LokataTyp) {
+	<form method="POST" action="/lokaty">
+		<input type="hidden" id="id" name="id" value={fmt.Sprintf("%v", lokata.Id)}/>
+		<input type="text" value={fmt.Sprintf("%v %%", lokata.Oprocentowanie)} readonly="readonly" disabled="disabled"/>
+		<input type="text" value={fmt.Sprintf("%v miesięcy", lokata.Dlugosc)} readonly="readonly" disabled="disabled"/>
+		<input type="submit" value="Załóż"/>
+	</form>
+}
+
+templ MojaLokata(lokata models.Lokata, typ models.LokataTyp) {
+	<form method="POST" action="/lokata_zamknij">
+		<input type="hidden" id="lokata" name="lokata" value={fmt.Sprintf("%v",lokata.Lokata)}/>
+		<label for="kwota">Kwota</label>
+		<input id="kwota" name="kwota" type="text" value={fmt.Sprintf("%v PLN", lokata.SrodkiStr())} readonly="readonly" disabled="disabled"/>
+
+		<label for="poczatek">Początek</label>
+		<input id="poczatek" name="poczatek" type="text" type="text" value={lokata.Data.Format(time.DateOnly)} readonly="readonly" disabled="disabled"/>
+		<label for="koniec">Koniec</label>
+		<input id="koniec" name="koniec" type="text" type="text" value={lokata.Koniec.Format(time.DateOnly)} readonly="readonly" disabled="disabled"/>
+
+		<label for="prct">Oprocentowanie</label>
+		<input id="prct" name="prct" type="text" value={fmt.Sprintf("%v %%", typ.Oprocentowanie)} readonly="readonly" disabled="disabled"/>
+		<input type="submit" value="Zamnknij"/>
+	</form>
+	<form method="POST" action="/przelej_lokata">
+		<input type="hidden" id="lokata" name="lokata" value={fmt.Sprintf("%v",lokata.Lokata)}/>
+		<label for="kwota">Kwota</label>
+		<input type="number" id="kwota" name="kwota"/>
+		<input type="submit" value="Przelej"/>
+	</form>
+}
+
+templ Przelew(przelew models.Przelew, nadawca models.Konto, adresat models.Konto) {
+	<form method="POST" action="/moje_przelewy">
+		<input type="hidden" id="lokata" name="lokata" value={fmt.Sprintf("%v", przelew.Id)}/>
+		<input type="text" value={fmt.Sprintf("%v PLN", przelew.SrodkiStr())} readonly="readonly" disabled="disabled"/>
+		<input type="text" value={przelew.Data.Format(time.DateOnly)} readonly="readonly" disabled="disabled"/>
+
+		Od: 
+		<input type="text" value={nadawca.NrKonta()} readonly="readonly" disabled="disabled"/>
+		
+		Do:
+		<input type="text" value={adresat.NrKonta()} readonly="readonly" disabled="disabled"/>
+
+		Tytuł: {przelew.Tytul}
+	</form>
+
+}
+
+
+templ Przelej() {
+	<form method="POST" action="/przelej">
+		<label for="srodki">Środki</label>
+		<input type="number" name="srodki" id="srodki"/>
+
+		<label for="adresat">Adresat</label>
+		<input type="text" name="adresat" id="adresat"/>
+
+		<label for="tytul">Tytuł</label>
+		<input type="text" name="tytul" id="tytul"/>
+
+		<input type="submit" value="Wykonaj"/>
+	</form>
+}
