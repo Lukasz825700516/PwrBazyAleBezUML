@@ -21,6 +21,108 @@ SET default_tablespace = '';
 SET default_table_access_method = heap;
 
 --
+-- Name: konto; Type: TABLE; Schema: public; Owner: admin
+--
+
+CREATE TABLE public.konto (
+    id integer NOT NULL,
+    nr numeric(24,0) NOT NULL,
+    srodki integer NOT NULL
+);
+
+
+ALTER TABLE public.konto OWNER TO admin;
+
+--
+-- Name: lokata; Type: TABLE; Schema: public; Owner: admin
+--
+
+CREATE TABLE public.lokata (
+    lokata integer NOT NULL,
+    konto integer NOT NULL,
+    srodki integer NOT NULL,
+    data date NOT NULL
+);
+
+
+ALTER TABLE public.lokata OWNER TO admin;
+
+--
+-- Name: close_lokata(integer, integer); Type: PROCEDURE; Schema: public; Owner: admin
+--
+
+CREATE PROCEDURE public.close_lokata(IN p_konto integer, IN p_lokata integer)
+    LANGUAGE sql
+    BEGIN ATOMIC
+ UPDATE public.konto SET srodki = (konto.srodki + ( SELECT lokata.srodki
+            FROM public.lokata
+           WHERE ((lokata.konto = close_lokata.p_konto) AND (lokata.lokata = close_lokata.p_lokata))))
+   WHERE (konto.id = close_lokata.p_konto);
+ DELETE FROM public.lokata
+   WHERE ((lokata.lokata = close_lokata.p_lokata) AND (lokata.konto = close_lokata.p_konto));
+END;
+
+
+ALTER PROCEDURE public.close_lokata(IN p_konto integer, IN p_lokata integer) OWNER TO admin;
+
+--
+-- Name: przelew(numeric, numeric, integer, character varying); Type: PROCEDURE; Schema: public; Owner: admin
+--
+
+CREATE PROCEDURE public.przelew(IN p_nadawca numeric, IN p_adresat numeric, IN p_kwota integer, IN p_tytul character varying)
+    LANGUAGE plpgsql
+    AS $$
+begin
+ if exists (select 1 from konto where nr=p_nadawca and srodki >= p_kwota)  then
+   insert into przelew(nadawca, adresat, kwota, data, tytul) values (p_nadawca, p_adresat, p_kwota, NOW(), p_tytul);
+   update konto set srodki=srodki-p_kwota where konto.nr = p_nadawca;
+  end if;
+end; $$;
+
+
+ALTER PROCEDURE public.przelew(IN p_nadawca numeric, IN p_adresat numeric, IN p_kwota integer, IN p_tytul character varying) OWNER TO admin;
+
+--
+-- Name: run_reccurent_payments(); Type: PROCEDURE; Schema: public; Owner: admin
+--
+
+CREATE PROCEDURE public.run_reccurent_payments()
+    LANGUAGE plpgsql
+    AS $$ 
+ declare my_cur cursor for 
+select
+nadawca,
+adresat,
+kwota,
+tytul,
+extract(epoch from data),
+extract(epoch from faza),
+extract(epoch from okres)
+from przelewc;
+
+ declare r_nadawca numeric(24);
+ declare r_adresat numeric(24);
+ declare r_kwota int;
+ declare r_tytul varchar;
+ declare r_data numeric;
+ declare r_faza numeric;
+ declare r_okres numeric;
+begin
+ open my_cur;
+ fetch my_cur into r_nadawca, r_adresat, r_kwota, r_tytul, r_data, r_faza, r_okres;
+ while FOUND loop
+  if (r_data - r_faza) / r_okres >= 1 then
+   call przelew(r_nadawca, r_adresat, r_kwota, r_tytul);
+  end if;
+  fetch my_cur into r_nadawca, r_adresat, r_kwota, r_tytul, r_data, r_faza, r_okres;
+ end loop;
+ close my_cur;
+end; $$;
+
+
+ALTER PROCEDURE public.run_reccurent_payments() OWNER TO admin;
+
+--
 -- Name: adresowe; Type: TABLE; Schema: public; Owner: admin
 --
 
@@ -94,19 +196,6 @@ ALTER SEQUENCE public.kontaktowe_id_seq OWNED BY public.kontaktowe.id;
 
 
 --
--- Name: konto; Type: TABLE; Schema: public; Owner: admin
---
-
-CREATE TABLE public.konto (
-    id integer NOT NULL,
-    nr numeric(24,0) NOT NULL,
-    srodki integer NOT NULL
-);
-
-
-ALTER TABLE public.konto OWNER TO admin;
-
---
 -- Name: konto_id_seq; Type: SEQUENCE; Schema: public; Owner: admin
 --
 
@@ -164,20 +253,6 @@ ALTER SEQUENCE public.logowania_id_seq OWNER TO admin;
 
 ALTER SEQUENCE public.logowania_id_seq OWNED BY public.logowania.id;
 
-
---
--- Name: lokata; Type: TABLE; Schema: public; Owner: admin
---
-
-CREATE TABLE public.lokata (
-    lokata integer NOT NULL,
-    konto integer NOT NULL,
-    srodki integer NOT NULL,
-    data date NOT NULL
-);
-
-
-ALTER TABLE public.lokata OWNER TO admin;
 
 --
 -- Name: lokaty; Type: TABLE; Schema: public; Owner: admin
@@ -260,7 +335,6 @@ ALTER SEQUENCE public.osobowe_id_seq OWNED BY public.osobowe.id;
 --
 
 CREATE TABLE public.przelew (
-    id integer NOT NULL,
     nadawca numeric(24,0) NOT NULL,
     adresat numeric(24,0) NOT NULL,
     kwota integer NOT NULL,
@@ -272,28 +346,6 @@ CREATE TABLE public.przelew (
 ALTER TABLE public.przelew OWNER TO admin;
 
 --
--- Name: przelew_id_seq; Type: SEQUENCE; Schema: public; Owner: admin
---
-
-CREATE SEQUENCE public.przelew_id_seq
-    AS integer
-    START WITH 1
-    INCREMENT BY 1
-    NO MINVALUE
-    NO MAXVALUE
-    CACHE 1;
-
-
-ALTER SEQUENCE public.przelew_id_seq OWNER TO admin;
-
---
--- Name: przelew_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: admin
---
-
-ALTER SEQUENCE public.przelew_id_seq OWNED BY public.przelew.id;
-
-
---
 -- Name: przelewc; Type: TABLE; Schema: public; Owner: admin
 --
 
@@ -303,7 +355,7 @@ CREATE TABLE public.przelewc (
     adresat numeric(24,0) NOT NULL,
     kwota integer NOT NULL,
     data timestamp without time zone NOT NULL,
-    okres time without time zone NOT NULL,
+    okres interval NOT NULL,
     faza timestamp without time zone NOT NULL,
     tytul character varying(255) NOT NULL
 );
@@ -457,13 +509,6 @@ ALTER TABLE ONLY public.osobowe ALTER COLUMN id SET DEFAULT nextval('public.osob
 
 
 --
--- Name: przelew id; Type: DEFAULT; Schema: public; Owner: admin
---
-
-ALTER TABLE ONLY public.przelew ALTER COLUMN id SET DEFAULT nextval('public.przelew_id_seq'::regclass);
-
-
---
 -- Name: przelewc id; Type: DEFAULT; Schema: public; Owner: admin
 --
 
@@ -500,8 +545,8 @@ COPY public.kontaktowe (id, email, teelefon) FROM stdin;
 --
 
 COPY public.konto (id, nr, srodki) FROM stdin;
-1	109010140000071219812874	0
-2	109010140000071219812875	2
+2	109010140000071219812875	1000
+1	109010140000071219812874	99850000
 \.
 
 
@@ -520,8 +565,6 @@ COPY public.logowania (id, login, haslo, autoryzacja2e, zaufany) FROM stdin;
 --
 
 COPY public.lokata (lokata, konto, srodki, data) FROM stdin;
-1	1	0	2024-01-19
-2	1	0	2024-01-19
 \.
 
 
@@ -548,8 +591,26 @@ COPY public.osobowe (id, imie, imie2, nazwisko, data, pesel, dokument, termin, c
 -- Data for Name: przelew; Type: TABLE DATA; Schema: public; Owner: admin
 --
 
-COPY public.przelew (id, nadawca, adresat, kwota, data, tytul) FROM stdin;
-1	109010140000071219812875	109010140000071219812874	1000	2024-01-25 21:28:20.986986	Przelew
+COPY public.przelew (nadawca, adresat, kwota, data, tytul) FROM stdin;
+109010140000071219812875	109010140000071219812874	1000	2024-01-25 21:28:20.986986	aaaa
+109010140000071219812874	109010140000071219812875	100	2024-01-26 08:23:46.550326	Haaa
+109010140000071219812874	109010140000071219812875	100	2024-01-26 08:25:48.018326	AAA
+109010140000071219812874	109010140000071219812875	100	2024-01-26 08:26:50.10316	aaa
+109010140000071219812874	109010140000071219812875	1000000	2024-01-26 09:37:29.740337	109010140000071219812875
+109010140000071219812874	109010140000071219812875	-199999900	2024-01-26 09:39:49.071305	Oddawaj moje pieniądze złodzieju
+109010140000071219812874	109010140000071219812875	100000	2024-01-26 15:27:47.76	przeeleww
+11112222333344445555	11112222333344445556	100	2024-02-02 08:31:34.993913	Shoudl work
+109010140000071219812874	109010140000071219812875	100	2024-02-05 06:36:36.503567	Test
+109010140000071219812874	109010140000071219812875	100000000	2024-02-05 06:36:53.995849	Test
+109010140000071219812874	109010140000071219812875	10000	2024-02-05 06:37:15.929942	Test
+109010140000071219812874	109010140000071219812875	10000	2024-02-05 06:37:32.036076	Test
+109010140000071219812874	109010140000071219812875	10000	2024-02-05 06:37:32.282517	Test
+109010140000071219812874	109010140000071219812875	10000	2024-02-05 06:37:32.528544	Test
+109010140000071219812874	109010140000071219812875	10000	2024-02-05 06:37:32.756457	Test
+109010140000071219812874	109010140000071219812875	10000	2024-02-05 06:37:32.950319	Test
+109010140000071219812874	109010140000071219812875	100	2024-02-05 08:31:05.219082	Przelew cykliczny
+109010140000071219812874	109010140000071219812875	100	2024-02-05 08:31:08.805895	Przelew cykliczny
+109010140000071219812874	109010140000071219812875	100	2024-02-05 08:31:09.119694	Przelew cykliczny
 \.
 
 
@@ -558,6 +619,7 @@ COPY public.przelew (id, nadawca, adresat, kwota, data, tytul) FROM stdin;
 --
 
 COPY public.przelewc (id, nadawca, adresat, kwota, data, okres, faza, tytul) FROM stdin;
+1	109010140000071219812874	109010140000071219812875	100	2024-01-30 08:10:30.42408	1 day	1970-01-01 00:00:00	Przelew cykliczny
 \.
 
 
@@ -618,13 +680,6 @@ SELECT pg_catalog.setval('public.lokaty_id_seq', 1, false);
 --
 
 SELECT pg_catalog.setval('public.osobowe_id_seq', 1, false);
-
-
---
--- Name: przelew_id_seq; Type: SEQUENCE SET; Schema: public; Owner: admin
---
-
-SELECT pg_catalog.setval('public.przelew_id_seq', 1, false);
 
 
 --
@@ -695,14 +750,6 @@ ALTER TABLE ONLY public.lokaty
 
 ALTER TABLE ONLY public.osobowe
     ADD CONSTRAINT osobowe_pkey PRIMARY KEY (id);
-
-
---
--- Name: przelew przelew_pkey; Type: CONSTRAINT; Schema: public; Owner: admin
---
-
-ALTER TABLE ONLY public.przelew
-    ADD CONSTRAINT przelew_pkey PRIMARY KEY (id);
 
 
 --
@@ -778,22 +825,6 @@ CREATE INDEX osobowe_termin ON public.osobowe USING btree (termin);
 
 
 --
--- Name: przelew fk_przelew_adresat; Type: FK CONSTRAINT; Schema: public; Owner: admin
---
-
-ALTER TABLE ONLY public.przelew
-    ADD CONSTRAINT fk_przelew_adresat FOREIGN KEY (adresat) REFERENCES public.konto(nr);
-
-
---
--- Name: przelew fk_przelew_nadawca; Type: FK CONSTRAINT; Schema: public; Owner: admin
---
-
-ALTER TABLE ONLY public.przelew
-    ADD CONSTRAINT fk_przelew_nadawca FOREIGN KEY (nadawca) REFERENCES public.konto(nr);
-
-
---
 -- Name: przelewc fk_przelewc_adresat; Type: FK CONSTRAINT; Schema: public; Owner: admin
 --
 
@@ -855,6 +886,76 @@ ALTER TABLE ONLY public.usb
 
 ALTER TABLE ONLY public.usb
     ADD CONSTRAINT fkusbosobowe FOREIGN KEY (d_osobowe) REFERENCES public.osobowe(id);
+
+
+--
+-- Name: TABLE konto; Type: ACL; Schema: public; Owner: admin
+--
+
+GRANT INSERT ON TABLE public.konto TO system;
+
+
+--
+-- Name: TABLE lokata; Type: ACL; Schema: public; Owner: admin
+--
+
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.lokata TO system;
+
+
+--
+-- Name: TABLE adresowe; Type: ACL; Schema: public; Owner: admin
+--
+
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.adresowe TO system;
+
+
+--
+-- Name: TABLE kontaktowe; Type: ACL; Schema: public; Owner: admin
+--
+
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.kontaktowe TO system;
+
+
+--
+-- Name: TABLE logowania; Type: ACL; Schema: public; Owner: admin
+--
+
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.logowania TO system;
+
+
+--
+-- Name: TABLE osobowe; Type: ACL; Schema: public; Owner: admin
+--
+
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.osobowe TO system;
+
+
+--
+-- Name: TABLE przelew; Type: ACL; Schema: public; Owner: admin
+--
+
+GRANT SELECT,INSERT,DELETE ON TABLE public.przelew TO system;
+
+
+--
+-- Name: TABLE przelewc; Type: ACL; Schema: public; Owner: admin
+--
+
+GRANT SELECT,INSERT,DELETE ON TABLE public.przelewc TO system;
+
+
+--
+-- Name: TABLE usb; Type: ACL; Schema: public; Owner: admin
+--
+
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.usb TO system;
+
+
+--
+-- Name: TABLE uzytkownicy; Type: ACL; Schema: public; Owner: admin
+--
+
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.uzytkownicy TO system;
 
 
 --

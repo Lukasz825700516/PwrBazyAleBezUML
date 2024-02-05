@@ -36,4 +36,22 @@ UKB - Użytkownik konta bankowego - klient banku posiadający w nim konto.
 0. Warunkiem złożenia podania elektronicznego o zamknięcie konta jest nieposiadanie aktywnych lokat.
 0. Zamknięcie przedterminowe wiąże się z utratą odsetek przez UKB.
 0. Chatbot posiada dostępność 24 godziny na dobę przez 7 dni w tygodniu.
-0. Implementacja systemu odbywa się w języku Java.
+
+### Wymagania dotyczące bezpieczeństwa danych
+
+0. Program bankowy ma dostęp do bazy danych za pomocą nieuprzywilejowanego konta system.
+0. Konto system, nie może usuwać danych z tabeli przelewy i modyfikować katalogu lokat.
+0. Konto system, może dodawać, modyfikować, usuwać dane w reszcie tabelach.
+0. Całe oprogramowanie ma działać bez uprawnień administracyjnych.
+
+### Wymagania systemowe
+
+0. Zaprojektowany system ma mieć możliwość łatwego skalowania.
+0. System ma mieć taką samą procedurę wdrażania niezależnie od sprzętu na którym ma być uruchomiony.
+0. Implementacja systemu odbywa się w języku go.
+
+### Wymagannia jakościowe
+
+0. System ma mieć możliwość obsłużenia conajmniej 10 zapytań na sekundę.
+0. System ma mieć możliwość obsłużenia conajmniej 100000 przelewów w ciągu roku.
+

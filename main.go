@@ -46,6 +46,7 @@ func main() {
 
 	// open database
 	db, err := sql.Open("postgres", psqlconn)
+	defer db.Close()
 	CheckError(err)
 
 	// close database

@@ -9,7 +9,7 @@ import (
 	"pwrbazy/models"
 	"pwrbazy/templates"
 	"strconv"
-
+	"github.com/gorilla/sessions"
 	"github.com/a-h/templ"
 )
 
@@ -26,6 +26,8 @@ func NewUserControler() UserControler {
 		indexTemplate: templates.IndexAccount,
 	}
 }
+
+var store = sessions.NewCookieStore([]byte("aafufiuahuihfeiufheuyuoy3hc7827yrcn7823yrcbicn78worcgifuii7a3rcgibwfi78"))
 
 func (o *UserControler) Add(db *sql.DB) {
 	http.HandleFunc("/login", func(w http.ResponseWriter, r *http.Request) {
